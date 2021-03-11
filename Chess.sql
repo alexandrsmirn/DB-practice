@@ -1,4 +1,5 @@
 --CREATE DATABASE chess;
+--USE DATABASE chess;
 
 CREATE TABLE chessman 
 	(cid SMALLINT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY(INCREMENT BY 1 START WITH 1),
@@ -141,7 +142,7 @@ INSERT INTO chessboard(cid, x, y) VALUES
 		 GROUP BY colour
 		)
 	WHERE figures_left = MAX(colour);
-	
+
 	/*либо*/
 	SELECT colour
 	FROM
@@ -158,11 +159,31 @@ INSERT INTO chessboard(cid, x, y) VALUES
 	WHERE x IN (SELECT x FROM result WHERE type = 'rook')
 		OR y IN (SELECT y from result WHERE type = 'rook');
 
-	/*либо*/
+	/*либо -- трюк с декартовым произведением*/
 	SELECT DISTINCT b.cid
 	FROM result AS a, result AS b
 	WHERE a.type = 'rook' AND (a.x = b.x OR a.y = b.y);
 
 --12
+	SELECT colour
+	FROM result
+	WHERE type = 'pawn'
+	GROUP BY colour HAVING COUNT(result.cid) > 0;
 
+--13
+	SELECT board1.cid
+	FROM board1 LEFT JOIN board2 ON board1.cid = board2.cid
+	WHERE board2.x IS NULL OR board1.x != board2.x OR board1.y != board2.y;
 
+--14
+	SELECT result.cid
+	FROM result, chessboard
+	WHERE chessboard.cid = 28 AND result.cid != 28
+		AND ABS(result.y - chessboard.y) <= 2 AND ABS(ASCII(result.x)-ASCII(chessboard.x)) <= 2;
+
+--15
+	SELECT result.cid
+	FROM result, chessboard
+	WHERE chessboard.cid = 12 AND result.cid != 12
+	ORDER BY (ABS(result.y - chessboard.y) + ABS(ASCII(result.x)-ASCII(chessboard.x))) ASC
+	LIMIT 1;
