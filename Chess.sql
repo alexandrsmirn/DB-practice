@@ -15,6 +15,14 @@ CREATE TABLE chessboard
 	 UNIQUE(x, y) --уникальные координаты
 	);
 
+CREATE TABLE history
+	(
+	num INTEGER NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY(INCREMENT BY 1 START WITH 1),
+	cid SMALLINT NOT NULL,
+	x_new CHAR(1),
+	y_new SMALLINT
+	);
+
 INSERT INTO chessman(type, colour) VALUES
 	('pawn', 'white'),
 	('pawn', 'white'),
@@ -187,3 +195,64 @@ INSERT INTO chessboard(cid, x, y) VALUES
 	WHERE chessboard.cid = 12 AND result.cid != 12
 	ORDER BY (ABS(result.y - chessboard.y) + ABS(ASCII(result.x)-ASCII(chessboard.x))) ASC
 	LIMIT 1;
+	
+	
+-------------procedure-----------------
+	CREATE OR REPLACE PROCEDURE public.make_turn(
+		cid integer,
+		x character,
+		y integer)
+	LANGUAGE 'plpgsql'
+	AS $BODY$
+	DECLARE
+		target_cid SMALLINT:=NULL;
+	BEGIN	
+		SELECT chessboard.cid INTO target_cid FROM chessboard where chessboard.x = turn.x AND chessboard.y = turn.y;
+		IF target_cid IS NOT NULL THEN
+			IF (SELECT colour FROM chessman WHERE chessman.cid = target_cid) = (SELECT colour FROM chessman WHERE chessman.cid = CAST(turn.cid AS SMALLINT)) THEN
+				RAISE NOTICE 'this square is forbidden';
+				RETURN;
+			ELSE
+				DELETE FROM chessboard WHERE chessboard.cid = target_cid;
+				RAISE NOTICE 'some figure was cut';
+			END IF;
+		END IF;
+		UPDATE chessboard
+			SET x = turn.x, y = CAST(turn.y AS SMALLINT)
+			WHERE chessboard.cid = CAST(turn.cid AS SMALLINT);
+		RAISE NOTICE 'moved successfully';
+	END;
+	$BODY$;
+	
+
+-------------trigger----------------- 
+	CREATE OR REPLACE FUNCTION log_event()
+		RETURNS TRIGGER AS
+	$$
+	BEGIN
+		IF TG_OP = 'UPDATE' THEN
+			INSERT INTO history(cid, x_new, y_new) VALUES (NEW.cid, NEW.x, NEW.y);
+			RAISE NOTICE 'figure successfully moved';
+			RETURN NEW;
+		ELSIF TG_OP = 'DELETE' THEN
+			INSERT INTO history(cid, x_new, y_new)  VALUES (OLD.cid, NULL, NULL);
+			RAISE NOTICE 'figure removed from the board';
+			RETURN OLD;
+		ELSIF TG_OP = 'INSERT' THEN
+			IF EXISTS(SELECT cid FROM chessboard WHERE cid = NEW.cid) THEN
+				RAISE NOTICE 'this figure already exists';
+				RETURN NULL;
+			ELSE
+				INSERT INTO history(cid, x_new, y_new) VALUES (NEW.cid, NEW.x, NEW.y);
+				RAISE NOTICE 'figure added to the board';
+				RETURN NEW;
+			END IF;
+		END IF;
+	END;
+	$$ LANGUAGE 'plpgsql';
+
+	CREATE TRIGGER write_to_history
+		BEFORE UPDATE OR DELETE OR INSERT
+		ON chessboard
+		FOR EACH ROW
+		EXECUTE PROCEDURE log_event();
