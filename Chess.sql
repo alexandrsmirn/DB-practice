@@ -205,23 +205,22 @@ INSERT INTO chessboard(cid, x, y) VALUES
 	LANGUAGE 'plpgsql'
 	AS $BODY$
 	DECLARE
-		target_cid SMALLINT:=NULL;
+	target_cid SMALLINT:=NULL;
 	BEGIN	
 		SELECT chessboard.cid INTO target_cid FROM chessboard where chessboard.x = turn.x AND chessboard.y = turn.y;
 		IF target_cid IS NOT NULL THEN
-			IF (SELECT colour FROM chessman WHERE chessman.cid = target_cid) = (SELECT colour FROM chessman WHERE chessman.cid = CAST(turn.cid AS SMALLINT)) THEN
+			IF (SELECT colour FROM chessman WHERE chessman.cid = target_cid) = (SELECT colour FROM chessman WHERE chessman.cid = turn.cid) THEN
 				RAISE NOTICE 'this square is forbidden';
 				RETURN;
 			ELSE
 				DELETE FROM chessboard WHERE chessboard.cid = target_cid;
-				RAISE NOTICE 'some figure was cut';
 			END IF;
 		END IF;
 		UPDATE chessboard
 			SET x = turn.x, y = CAST(turn.y AS SMALLINT)
 			WHERE chessboard.cid = CAST(turn.cid AS SMALLINT);
-		RAISE NOTICE 'moved successfully';
 	END;
+
 	$BODY$;
 	
 
