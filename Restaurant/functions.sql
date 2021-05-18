@@ -23,44 +23,61 @@ $BODY$;
 
 
 
-CREATE OR REPLACE PROCEDURE public.make_order(
-		dish_name VARCHAR(50);
-		)
-LANGUAGE 'plpgsql'
+CREATE OR REPLACE FUNCTION public.make_order_func(IN dish_name character varying)
+    RETURNS integer
+    LANGUAGE 'plpgsql'
+    VOLATILE
+    PARALLEL UNSAFE
+    COST 100
+    
 AS $BODY$
 DECLARE
-	dish_id INTEGER := NULL;
+	found_dish_id INTEGER := NULL;
 	max_count INTEGER := 10000000;
 	id_to_change INTEGER := NULL;
+	change_price NUMERIC(5, 2);
+	
+	id__ INTEGER;
+	name__ VARCHAR(50);
+	amount__ INTEGER;
+	available__ INTEGER;
+	price__ NUMERIC(5, 2);
+	total INTEGER;
 BEGIN	
-	SELECT dishes.d_id INTO dish_id FROM dishes WHERE dishes.d_name = make_order.dish_name;
-	IF dish_id IS NULL THEN
-		RAISE ERROR 'There"s no such dish';
-		RETURN;
+	SELECT dishes.d_id INTO found_dish_id FROM dishes WHERE dishes.d_name = make_order_func.dish_name;
+	IF found_dish_id IS NULL THEN
+		RAISE NOTICE 'There"s no such dish';
+		RETURN 0;
 	ELSE
-		CREATE TEMP TALBE dish_ingr AS
-			SELECT id_ AS ingredients.i_id, ingredients.d_name AS name_, dish_composition.ing_amount AS amount_, ingredients.available_count AS available_, ingredients.price AS price_ FROM dishes
-			JOIN dish_composition ON dishes.d_id = dish_composition.dish_id
-			JOIN ingredients ON dish_composition.ing_id = ingredients.i_id;
+		CREATE TEMP TABLE dish_ingr
+			(id_ INTEGER, amount_ INTEGER, price_ NUMERIC(5, 2));
 			
-		FOR id__, name__, amount__, available__, price__ IN dish_ingr
+		FOR id__, name__, amount__, available__, price__ IN
+			(SELECT ingredients.i_id, ingredients.d_name, dish_composition.ing_amount, ingredients.available_count, ingredients.price FROM dishes
+			JOIN dish_composition ON dishes.d_id = dish_composition.dish_id
+			JOIN ingredients ON dish_composition.ing_id = ingredients.i_id
+			WHERE dishes.d_id = found_dish_id)
 		LOOP
 			IF amount__ > available__ THEN
 				SELECT change_id INTO id_to_change FROM ingredients_replacement WHERE i_id = id__;
-				IF change_id IS NULL THEN
-					RAISE ERROR 'ingredient is missing';
-					RETURN;
+				IF (id_to_change IS NULL) OR ((SELECT available_count FROM ingredients WHERE ingredients.i_id = id_to_change) < amount__) THEN
+					RAISE NOTICE 'ingredient is missing';
+					RETURN 0;
 				ELSE
-					RAISE NOTICE 'change ingredient';
-					--DELETE FROM dish_ingr WHERE dish_ing.id_ = id__;
-					--INSERT INTO dish_ingr VALUES (SELECT i_id, )
-					UPDATE dish_ingr SET price_ = (SELECT price FROM ingredients WHERE i_id = change_id) WHERE id_ = id__;
+					RAISE NOTICE 'change % to %', name__, (SELECT d_name FROM ingredients WHERE ingredients.i_id = id_to_change);
+					SELECT price INTO change_price FROM ingredients WHERE ingredients.i_id = id_to_change;
+					INSERT INTO dish_ingr VALUES (id_to_change, amount__, change_price);
 				END IF;
-			ELSIF available__ / amount__ < max_count THEN
-				max_count = available__ / amount__;
+			ELSE
+				INSERT INTO dish_ingr VALUES (id__, amount__, price__);
+				IF available__ / amount__ < max_count THEN
+					max_count = available__ / amount__;
+				END IF;
 			END IF;
 		END LOOP;
-		SELECT COUNT(price_)*max_count FROM dish_ingr;
+		SELECT SUM(price_)*max_count INTO total FROM dish_ingr;
+		DROP TABLE dish_ingr;
+		RETURN total;
 	END IF;
 END;
 $BODY$;
