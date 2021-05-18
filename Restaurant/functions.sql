@@ -30,13 +30,37 @@ LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
 	dish_id INTEGER := NULL;
+	max_count INTEGER := 10000000;
+	id_to_change INTEGER := NULL;
 BEGIN	
 	SELECT dishes.d_id INTO dish_id FROM dishes WHERE dishes.d_name = make_order.dish_name;
 	IF dish_id IS NULL THEN
 		RAISE ERROR 'There"s no such dish';
 		RETURN;
 	ELSE
-		IF 
+		CREATE TEMP TALBE dish_ingr AS
+			SELECT id_ AS ingredients.i_id, ingredients.d_name AS name_, dish_composition.ing_amount AS amount_, ingredients.available_count AS available_, ingredients.price AS price_ FROM dishes
+			JOIN dish_composition ON dishes.d_id = dish_composition.dish_id
+			JOIN ingredients ON dish_composition.ing_id = ingredients.i_id;
+			
+		FOR id__, name__, amount__, available__, price__ IN dish_ingr
+		LOOP
+			IF amount__ > available__ THEN
+				SELECT change_id INTO id_to_change FROM ingredients_replacement WHERE i_id = id__;
+				IF change_id IS NULL THEN
+					RAISE ERROR 'ingredient is missing';
+					RETURN;
+				ELSE
+					RAISE NOTICE 'change ingredient';
+					--DELETE FROM dish_ingr WHERE dish_ing.id_ = id__;
+					--INSERT INTO dish_ingr VALUES (SELECT i_id, )
+					UPDATE dish_ingr SET price_ = (SELECT price FROM ingredients WHERE i_id = change_id) WHERE id_ = id__;
+				END IF;
+			ELSIF available__ / amount__ < max_count THEN
+				max_count = available__ / amount__;
+			END IF;
+		END LOOP;
+		SELECT COUNT(price_)*max_count FROM dish_ingr;
 	END IF;
 END;
 $BODY$;
