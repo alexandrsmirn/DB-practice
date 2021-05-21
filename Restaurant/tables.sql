@@ -99,3 +99,10 @@ CREATE TABLE public.child_dishes
         ON UPDATE NO ACTION
         ON DELETE NO ACTION
 )
+
+CREATE TABLE new_order_composition
+(	
+	d_name VARCHAR(50) PRIMARY KEY,
+	d_category VARCHAR(10) CHECK (d_category IN ('dish', 'lunch'),
+	d_count INTEGER CHECK (d_count > 0)
+);
