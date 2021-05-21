@@ -20,8 +20,7 @@ BEGIN
 END;
 $BODY$;
 
-
-
+-------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.make_order_func(IN dish_name character varying)
     RETURNS integer
@@ -81,3 +80,35 @@ BEGIN
 	END IF;
 END;
 $BODY$;
+
+-----------------------
+
+CREATE OR REPLACE PROCEDURE public.add_dish(
+	d_name VARCHAR(50),
+	d_type VARCHAR(10),
+	d_count INTEGER)
+LANGUAGE 'plpgsql'
+AS $BODY$
+DECLARE
+	found_id INTEGER := NULL;
+BEGIN
+	IF d_type = 'dish' THEN
+		SELECT dishes.d_id INTO found_id FROM dishes WHERE dishes.d_name = add_dish.d_name;
+		IF d_id IS NULL THEN
+			RAISE NOTICE 'There''s no such dish';
+		ELSE
+			INSERT INTO new_order_composition VALUES (add_dish.d_name, 'dish', add_dish.d_count);
+		END IF;
+	ELSIF d_type = 'lunch' THEN
+		SELECT set_lunches.l_id INTO found_id FROM set_lunches WHERE set_lunches.l_name = add_dish.d_name;
+		IF d_id IS NULL THEN
+			RAISE NOTICE 'There''s no such lunch';
+		ELSE
+			INSERT INTO new_order_composition VALUES (add_dish.d_name, 'lunch', add_dish.d_count);
+		END IF;
+	ELSE
+		RAISE NOTICE 'Wrong type';
+	END IF;
+END;
+$BODY$;
+
