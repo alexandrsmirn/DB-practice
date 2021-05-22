@@ -94,17 +94,21 @@ DECLARE
 BEGIN
 	IF d_type = 'dish' THEN
 		SELECT dishes.d_id INTO found_id FROM dishes WHERE dishes.d_name = add_dish.d_name;
-		IF d_id IS NULL THEN
+		IF found_id IS NULL THEN
 			RAISE NOTICE 'There''s no such dish';
 		ELSE
-			INSERT INTO new_order_composition VALUES (add_dish.d_name, 'dish', add_dish.d_count);
+			INSERT INTO new_order_composition VALUES (found_id, add_dish.d_count);
 		END IF;
 	ELSIF d_type = 'lunch' THEN
 		SELECT set_lunches.l_id INTO found_id FROM set_lunches WHERE set_lunches.l_name = add_dish.d_name;
-		IF d_id IS NULL THEN
+		IF found_id IS NULL THEN
 			RAISE NOTICE 'There''s no such lunch';
 		ELSE
-			INSERT INTO new_order_composition VALUES (add_dish.d_name, 'lunch', add_dish.d_count);
+			INSERT INTO new_order_composition (
+				SELECT lunch_composition.d_id, add_dish.d_count 
+				FROM lunch_composition 
+				WHERE lunch_composition.l_id = found_id
+			);
 		END IF;
 	ELSE
 		RAISE NOTICE 'Wrong type';
@@ -120,28 +124,83 @@ LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
 	new_ord_id INTEGER := NULL;
+	ord_id_ INTEGER;
+	expire_time_ TIMESTAMP;
+	ing_id_ INTEGER;
+	required_ INTEGER;
+	ing_amount_ INTEGER;
 BEGIN
-	IF NOT EXISTS(SELECT * FROM new_order_compositionn LIMIT 1) THEN
+	IF NOT EXISTS(SELECT * FROM new_order_composition LIMIT 1) THEN
 		RAISE NOTICE 'Nothing to order';
 		RETURN;
 	ELSE
-		INSERT INTO processing_orders(ord_start_time) VALUES (time_to_wait);
-		--SELECT ord_id INTO new_ord_id FROM processing_orders ORDER BY ord_id DESC LIMIT 1;
-		--INSERT INTO order_structure VALUES(SELECT new_ord_id, new_order_composition.d_id)
-		IF (time_to_wait < INTERVAL '10m') THEN
-			IF EXISTS (
-				SELECT * FROM new_order_composition
-						 JOIN dish_composition ON new_order_composition.d_id = dish_composition.dish_id
-						 JOIN ingredients ON dish_composition.ing_id = ingredients.i_id)
-						 WHERE *new_order_composition.d_cout
-			FOR ... IN (SELECT d_name, d_category, d_count)
-		ELSE
-
+		CREATE TEMP TABLE required_ingr AS
+			SELECT ing_id, required, available_count FROM (
+				SELECT ing_id, sum(ing_amount*d_count) AS required
+				FROM new_order_composition
+				JOIN dish_composition ON new_order_composition.d_id = dish_composition.dish_id
+				GROUP BY ing_id) AS ingr_needed
+			JOIN ingredients ON ingredients.i_id = ing_id;
+			
+		INSERT INTO processing_orders(ord_expire_time) VALUES (NOW() + time_to_wait);
+		SELECT ord_id INTO new_ord_id FROM processing_orders ORDER BY ord_id DESC LIMIT 1;
+		
+		IF EXISTS (SELECT * FROM required_ingr WHERE required > available_count) THEN
+			RAISE NOTICE 'Some ingredients are missing, checking for expired orders';
+			FOR ord_id_, expire_time_ IN (SELECT ord_id, ord_expire_time FROM processing_orders)
+			LOOP
+				IF (NOW() - expire_time_ > INTERVAL '10m') THEN
+					FOR ing_id_, ing_amount_ IN (SELECT ing_id, ing_amount FROM order_structure WHERE order_structure.ord_id = ord_id_)
+					LOOP
+						UPDATE ingredients SET available_count = available_count + ing_amount_ WHERE ingredients.i_id = ing_id_;
+						UPDATE required_ingr SET available_count = available_count + ing_amount_ WHERE required_ingr.ing_id = ing_id_;
+					END LOOP;
+					DELETE FROM processing_orders WHERE processing_orders.ord_id = ord_id_;
+				END IF;
+			END LOOP;
+			
+			IF EXISTS (SELECT * FROM required_ingr WHERE required > available_count) THEN
+				RAISE NOTICE 'Some ingredients are still missing, can''t make order';
+				DELETE FROM processing_orders WHERE ord_id = new_ord_id;
+				DROP TABLE required_ingr;
+				TRUNCATE TABLE new_order_composition;
+				RETURN;
+			END IF;
 		END IF;
+		
+		INSERT INTO order_structure (SELECT new_ord_id, required_ingr.ing_id, required_ingr.required FROM required_ingr);
+		
+		FOR ing_id_, required_ IN (SELECT ing_id, required FROM required_ingr)
+		LOOP
+			UPDATE ingredients SET available_count = available_count - required_ WHERE ing_id_ = ingredients.i_id;
+		END LOOP;
+		
+		IF (time_to_wait < INTERVAL '10m') THEN	
+			DELETE FROM processing_orders WHERE ord_id = new_ord_id;			
+		END IF;
+		DROP TABLE required_ingr;
+		TRUNCATE TABLE new_order_composition;
 	END IF;
 END;
 $BODY$;
 
 
 --итак планы: думаю стоит развернуть все ланчи в табличке new_order_composition, чтобы были только блюда.
+select d_id, ing_id, sum(ing_amount*d_count)
+from new_order_composition
+join dish_composition ON new_order_composition.d_id = dish_composition.dish_id
+GROUP BY d_id, ing_id
+
+SELECT d_id, ing_id, need, available_count FROM (select d_id, ing_id, sum(ing_amount*d_count) AS need
+from new_order_composition
+join dish_composition ON new_order_composition.d_id = dish_composition.dish_id
+GROUP BY d_id, ing_id) AS lol JOIN ingredients ON ingredients.i_id = ing_id
+
+CREATE TEMP TABLE required_ingr AS
+			SELECT d_id, ing_id, required, available_count FROM (
+				SELECT d_id, ing_id, sum(ing_amount*d_count) AS required
+				FROM new_order_composition
+				JOIN dish_composition ON new_order_composition.d_id = dish_composition.dish_id
+				GROUP BY d_id, ing_id) AS ingr_needed
+			JOIN ingredients ON ingredients.i_id = ing_id
 

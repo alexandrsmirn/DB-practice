@@ -54,21 +54,15 @@ CREATE TABLE public.lunch_composition
 CREATE TABLE public.order_structure
 (
     ord_id integer NOT NULL,
-    d_id integer NOT NULL,
-    d_category character varying(10) COLLATE pg_catalog."default" NOT NULL,
-    CONSTRAINT order_structure_pkey PRIMARY KEY (ord_id),
-    CONSTRAINT order_structure_ord_id_d_id_d_category_key UNIQUE (ord_id, d_id, d_category),
-    CONSTRAINT order_structure_ord_id_fkey FOREIGN KEY (ord_id)
-        REFERENCES public.processing_orders (ord_id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION,
-    CONSTRAINT order_structure_d_category_check CHECK (d_category::text = ANY (ARRAY['dish'::character varying, 'lunch'::character varying]::text[]))
+    ing_id integer NOT NULL,
+    ing_amount integer NOT NULL,
+    CONSTRAINT order_structure_ord_id_d_id_d_category_key UNIQUE (ord_id, ing_id)
 )
 
 CREATE TABLE public.processing_orders
 (
     ord_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    ord_start_time timestamp without time zone NOT NULL,
+    ord_expire_time timestamp without time zone NOT NULL,
     CONSTRAINT processing_orders_pkey PRIMARY KEY (ord_id)
 )
 
@@ -102,8 +96,6 @@ CREATE TABLE public.child_dishes
 
 CREATE TABLE new_order_composition
 (	
-	d_name VARCHAR(50) NOT NULL PRIMARY KEY,
-	d_category VARCHAR(10) NOT NULL CHECK (d_category IN ('dish', 'lunch')),
 	d_id INTEGER,
 	d_count INTEGER NOT NULL CHECK (d_count > 0)
 );
