@@ -112,3 +112,36 @@ BEGIN
 END;
 $BODY$;
 
+-----------------------
+
+CREATE OR REPLACE PROCEDURE public.make_new_order(
+		time_to_wait INTERVAL DAY TO MINUTE)
+LANGUAGE 'plpgsql'
+AS $BODY$
+DECLARE
+	new_ord_id INTEGER := NULL;
+BEGIN
+	IF NOT EXISTS(SELECT * FROM new_order_compositionn LIMIT 1) THEN
+		RAISE NOTICE 'Nothing to order';
+		RETURN;
+	ELSE
+		INSERT INTO processing_orders(ord_start_time) VALUES (time_to_wait);
+		--SELECT ord_id INTO new_ord_id FROM processing_orders ORDER BY ord_id DESC LIMIT 1;
+		--INSERT INTO order_structure VALUES(SELECT new_ord_id, new_order_composition.d_id)
+		IF (time_to_wait < INTERVAL '10m') THEN
+			IF EXISTS (
+				SELECT * FROM new_order_composition
+						 JOIN dish_composition ON new_order_composition.d_id = dish_composition.dish_id
+						 JOIN ingredients ON dish_composition.ing_id = ingredients.i_id)
+						 WHERE *new_order_composition.d_cout
+			FOR ... IN (SELECT d_name, d_category, d_count)
+		ELSE
+
+		END IF;
+	END IF;
+END;
+$BODY$;
+
+
+--итак планы: думаю стоит развернуть все ланчи в табличке new_order_composition, чтобы были только блюда.
+

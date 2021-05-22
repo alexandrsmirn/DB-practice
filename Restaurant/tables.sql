@@ -102,7 +102,8 @@ CREATE TABLE public.child_dishes
 
 CREATE TABLE new_order_composition
 (	
-	d_name VARCHAR(50) PRIMARY KEY,
-	d_category VARCHAR(10) CHECK (d_category IN ('dish', 'lunch'),
-	d_count INTEGER CHECK (d_count > 0)
+	d_name VARCHAR(50) NOT NULL PRIMARY KEY,
+	d_category VARCHAR(10) NOT NULL CHECK (d_category IN ('dish', 'lunch')),
+	d_id INTEGER,
+	d_count INTEGER NOT NULL CHECK (d_count > 0)
 );
