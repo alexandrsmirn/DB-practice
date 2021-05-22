@@ -22,13 +22,8 @@ $BODY$;
 
 -------------------------------------------------
 
-CREATE OR REPLACE FUNCTION public.make_order_func(IN dish_name character varying)
-    RETURNS integer
-    LANGUAGE 'plpgsql'
-    VOLATILE
-    PARALLEL UNSAFE
-    COST 100
-    
+CREATE OR REPLACE PROCEDURE public.max_order(IN dish_name character varying)
+LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
 	found_dish_id INTEGER := NULL;
@@ -41,12 +36,11 @@ DECLARE
 	amount__ INTEGER;
 	available__ INTEGER;
 	price__ NUMERIC(5, 2);
-	total INTEGER;
 BEGIN	
-	SELECT dishes.d_id INTO found_dish_id FROM dishes WHERE dishes.d_name = make_order_func.dish_name;
+	SELECT dishes.d_id INTO found_dish_id FROM dishes WHERE dishes.d_name = max_order.dish_name;
 	IF found_dish_id IS NULL THEN
 		RAISE NOTICE 'There"s no such dish';
-		RETURN 0;
+		RETURN;
 	ELSE
 		CREATE TEMP TABLE dish_ingr
 			(id_ INTEGER, amount_ INTEGER, price_ NUMERIC(5, 2));
@@ -60,8 +54,8 @@ BEGIN
 			IF amount__ > available__ THEN
 				SELECT change_id INTO id_to_change FROM ingredients_replacement WHERE i_id = id__;
 				IF (id_to_change IS NULL) OR ((SELECT available_count FROM ingredients WHERE ingredients.i_id = id_to_change) < amount__) THEN
-					RAISE NOTICE 'ingredient is missing';
-					RETURN 0;
+					RAISE NOTICE 'ingredient is missing, you can''t order even one';
+					RETURN;
 				ELSE
 					RAISE NOTICE 'change % to %', name__, (SELECT d_name FROM ingredients WHERE ingredients.i_id = id_to_change);
 					SELECT price INTO change_price FROM ingredients WHERE ingredients.i_id = id_to_change;
@@ -74,9 +68,10 @@ BEGIN
 				END IF;
 			END IF;
 		END LOOP;
-		SELECT SUM(price_)*max_count INTO total FROM dish_ingr;
+		
+		RAISE NOTICE 'You can order no more than % %', max_count, dish_name;
 		DROP TABLE dish_ingr;
-		RETURN total;
+		RETURN;
 	END IF;
 END;
 $BODY$;
