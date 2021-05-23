@@ -178,6 +178,7 @@ BEGIN
 		DROP TABLE required_ingr;
 		TRUNCATE TABLE new_order_composition;
 	END IF;
+	RETURN NEW;
 END;
 $BODY$;
 
@@ -212,13 +213,13 @@ DECLARE
 	ing_id_ INTEGER;
 	ing_amount_ INTEGER;
 BEGIN
-	FOR ord_id_ IN (SELECT ord_id FROM completed_orders WHERE NOW() - ord_complete_time > '1 month')
+	FOR ord_id_ IN (SELECT ord_id FROM completed_orders WHERE NOW() - ord_complete_time > INTERVAL'1 month')
 	LOOP
 		DELETE FROM order_structure WHERE order_structure.ord_id = ord_id_;
 		DELETE FROM completed_orders WHERE completed_orders.ord_id = ord_id_;
 	END LOOP;
 		
-	FOR ord_id_ IN (SELECT ord_id FROM processing_orders WHERE NOW() - ord_expire_time > '2 days')
+	FOR ord_id_ IN (SELECT ord_id FROM processing_orders WHERE NOW() - ord_expire_time > INTERVAL'2 days')
 	LOOP
 		FOR ing_id_, ing_amount_ IN (SELECT ing_id, ing_amount FROM order_structure WHERE order_structure.ord_id = ord_id_)
 		LOOP
@@ -236,25 +237,3 @@ CREATE TRIGGER clear_old_orders
 	ON completed_orders
 	FOR EACH ROW
 	EXECUTE PROCEDURE remove_old();
-
-
----------------------------------------------------------------
---итак планы: думаю стоит развернуть все ланчи в табличке new_order_composition, чтобы были только блюда.
-select d_id, ing_id, sum(ing_amount*d_count)
-from new_order_composition
-join dish_composition ON new_order_composition.d_id = dish_composition.dish_id
-GROUP BY d_id, ing_id
-
-SELECT d_id, ing_id, need, available_count FROM (select d_id, ing_id, sum(ing_amount*d_count) AS need
-from new_order_composition
-join dish_composition ON new_order_composition.d_id = dish_composition.dish_id
-GROUP BY d_id, ing_id) AS lol JOIN ingredients ON ingredients.i_id = ing_id
-
-CREATE TEMP TABLE required_ingr AS
-			SELECT d_id, ing_id, required, available_count FROM (
-				SELECT d_id, ing_id, sum(ing_amount*d_count) AS required
-				FROM new_order_composition
-				JOIN dish_composition ON new_order_composition.d_id = dish_composition.dish_id
-				GROUP BY d_id, ing_id) AS ingr_needed
-			JOIN ingredients ON ingredients.i_id = ing_id
-
