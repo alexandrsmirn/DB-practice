@@ -146,8 +146,17 @@ INSERT INTO ingredients_replacement VALUES
 	(20, 21),	--caramel and chocolate
 	(21, 20);
 	
+INSERT INTO vegetarian_dishes VALUES
+	(8),
+	(15),
+	(16),
+	(17),
+	(18);
 	
-	
+INSERT INTO child_dishes VALUES
+	(2),
+	(3),
+	(6);
 	
 	
 	

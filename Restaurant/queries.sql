@@ -1,5 +1,5 @@
 --1
-SELECT COUNT(*) FROM dishes WHERE dishes.d_type = 'Dessert';
+SELECT COUNT(*) AS dessert_count FROM dishes WHERE dishes.d_type = 'Dessert';
 
 --2
 SELECT dishes.d_name, ingredients.d_name, dish_composition.ing_amount
