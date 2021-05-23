@@ -171,15 +171,74 @@ BEGIN
 		END LOOP;
 		
 		IF (time_to_wait < INTERVAL '10m') THEN	
-			DELETE FROM processing_orders WHERE ord_id = new_ord_id;			
+			DELETE FROM processing_orders WHERE ord_id = new_ord_id;
+			INSERT INTO completed_orders VALUES(new_ord_id, NOW() + time_to_wait);			
 		END IF;
+		RAISE NOTICE 'Your order ID: %', new_ord_id;
 		DROP TABLE required_ingr;
 		TRUNCATE TABLE new_order_composition;
 	END IF;
 END;
 $BODY$;
 
+------------------------------------
 
+CREATE OR REPLACE PROCEDURE public.take_order(
+	ord_id INTEGER)
+LANGUAGE 'plpgsql'
+AS $BODY$
+DECLARE
+	found_id INTEGER := NULL;
+BEGIN
+	IF NOT EXISTS (SELECT * FROM processing_orders WHERE processing_orders.ord_id = take_order.ord_id) THEN
+		RAISE NOTICE 'No such order';
+		RETURN;
+	ELSE
+		DELETE FROM processing_orderes WHERE processing_orderes.ord_id = take_order.ord_id;
+		INSERT INTO completed_orders VALUES(ord_id, NOW());
+		RAISE NOTICE 'Order completed';
+		RETURN;
+	END IF;
+END;
+$BODY$;
+
+-------------------------------------
+
+CREATE OR REPLACE FUNCTION remove_old()
+	RETURNS TRIGGER AS
+$$
+DECLARE
+	ord_id_ INTEGER;
+	ing_id_ INTEGER;
+	ing_amount_ INTEGER;
+BEGIN
+	FOR ord_id_ IN (SELECT ord_id FROM completed_orders WHERE NOW() - ord_complete_time > '1 month')
+	LOOP
+		DELETE FROM order_structure WHERE order_structure.ord_id = ord_id_;
+		DELETE FROM completed_orders WHERE completed_orders.ord_id = ord_id_;
+	END LOOP;
+		
+	FOR ord_id_ IN (SELECT ord_id FROM processing_orders WHERE NOW() - ord_expire_time > '2 days')
+	LOOP
+		FOR ing_id_, ing_amount_ IN (SELECT ing_id, ing_amount FROM order_structure WHERE order_structure.ord_id = ord_id_)
+		LOOP
+			UPDATE ingredients SET available_count = available_count + ing_amount_ WHERE ingredients.i_id = ing_id_;
+		END LOOP;
+		
+		DELETE FROM order_structure WHERE order_structure.ord_id = ord_id_;
+		DELETE FROM processing_orders WHERE processing_orders.ord_id = ord_id_;
+	END LOOP;
+END;
+$$ LANGUAGE 'plpgsql';
+
+CREATE TRIGGER clear_old_orders
+	AFTER INSERT
+	ON completed_orders
+	FOR EACH ROW
+	EXECUTE PROCEDURE remove_old();
+
+
+---------------------------------------------------------------
 --итак планы: думаю стоит развернуть все ланчи в табличке new_order_composition, чтобы были только блюда.
 select d_id, ing_id, sum(ing_amount*d_count)
 from new_order_composition
